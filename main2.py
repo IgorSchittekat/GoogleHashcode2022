@@ -18,7 +18,7 @@ class Contributor:
     def __hash__(self):
         return hash(self.name)
 
-    def has_skill(self, skill, mentoring:bool):
+    def has_skill(self, skill, mentoring:bool) -> (bool, int):
         """
             Check whether the specified contributor has this skill, taking into account whether or not there is mentoring.
         """
@@ -57,6 +57,12 @@ class Skill:
 
     def has_contributor(self):
         return self.contributor is not None
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
 
 class Project:
     def __init__(self, name:str, days:int, score:int, deadline:int, skills:list):
@@ -129,6 +135,7 @@ def check_project(project, contributors, assigned_contributors_final):
 
     # keep track of the currently used contributors for this project
     assigned_contributors_temp = {}
+    mentored_skills = set()
 
     outproject = OutProject(project.name)
     # check that all skills are covered
@@ -141,18 +148,24 @@ def check_project(project, contributors, assigned_contributors_final):
             if contributor in assigned_contributors_temp:
                 continue # skip contributor
 
-            if contributor.has_skill(skill, False)[0]:
+            mentoring_available = skill in mentored_skills
+
+            has_skill, contr_skill = contributor.has_skill(skill, mentoring_available)
+
+            if has_skill:
                 # add to project
                 skill.contributor = contributor
                 assigned_contributors_temp[contributor] = skill
                 outproject.add_contributor(contributor.name)
+                if contr_skill.level >= skill.level:
+                    mentored_skills.add(skill)
                 break
 
 
 
         # check that the skill has been assigned
         if skill.contributor is None:
-            return False, None, None
+            return "Again", None, None
         
 
     available_times = [x.next_available for x in assigned_contributors_temp]
@@ -164,7 +177,10 @@ def check_project(project, contributors, assigned_contributors_final):
         contributor.next_available = possible_start + project.days
         # level up contributor
         project_skill = assigned_contributors_temp[contributor]
-        contributor_skill = contributor.has_skill(project_skill, False)[1]
+
+        mentoring_available = skill in mentored_skills
+
+        contributor_skill = contributor.has_skill(project_skill, mentoring_available)[1]
         if contributor_skill.level <= project_skill.level:
             contributor_skill.level += 1
 
@@ -186,12 +202,24 @@ def main(in_filename: str, out_filename:str):
     # permanently assigned contributors
     assigned_contributors_final = set()
 
+    appended = {}
+
     outprojects = []
     for project in file.projects:
         result, outproject, assigned_contributors_temp = check_project(project, file.contributors, assigned_contributors_final)
 
         if not result:
             continue # skip project
+
+        if result == "Again":
+            if project.name in appended:
+                if appended[project.name] < 5:
+                    appended[project.name] += 1
+                    file.projects.append(project)
+            else:
+                file.projects.append(project)
+                appended[project.name] = 0
+            continue
             
         #print(f"Project '{project.name}' is approved.")
 
@@ -207,9 +235,9 @@ def main(in_filename: str, out_filename:str):
 
 if __name__ == '__main__':
     main("input_data/a_an_example.in.txt", "output_a.txt")
-    # main("input_data/b_better_start_small.in.txt", "output_b.txt")
+    main("input_data/b_better_start_small.in.txt", "output_b.txt")
     main("input_data/c_collaboration.in.txt", "output_c.txt")
     main("input_data/d_dense_schedule.in.txt", "output_d.txt")
-    # main("input_data/e_exceptional_skills.in.txt", "output_e.txt")
+    main("input_data/e_exceptional_skills.in.txt", "output_e.txt")
     main("input_data/f_find_great_mentors.in.txt", "output_f.txt")
 
